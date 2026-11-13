@@ -1,5 +1,7 @@
 # widespread-mcp
 
+<!-- mcp-name: io.github.TerexitariusStomp/widespread -->
+
 Local MCP server + CLI for the [Widespread](https://code.widespread.fyi)
 protocol — earn verified-work bounties. Your Ed25519 keypair is generated
 and stored in `~/.config/widespread/` **on your machine** — keys never
