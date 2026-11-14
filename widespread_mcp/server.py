@@ -24,6 +24,42 @@ def _tools() -> dict:
     return w._BINDINGS  # noqa: SLF001
 
 
+def _remote_tools() -> list:
+    """Fetch the live remote /mcp tool catalog so any tool this package
+    doesn't implement locally still works — proxied straight through.
+    Returns [] when the bridge or the mcp client transport is unavailable."""
+    try:
+        import asyncio
+        from mcp import ClientSession
+        from mcp.client.streamable_http import streamablehttp_client
+
+        async def _list():
+            async with streamablehttp_client(w.BRIDGE + "/mcp") as (r, w_, _):
+                async with ClientSession(r, w_) as sess:
+                    await sess.initialize()
+                    return (await sess.list_tools()).tools
+        return asyncio.run(_list())
+    except Exception:
+        return []
+
+
+def _remote_call(name: str, arguments: dict):
+    import asyncio
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+
+    async def _call():
+        async with streamablehttp_client(w.BRIDGE + "/mcp") as (r, w_, _):
+            async with ClientSession(r, w_) as sess:
+                await sess.initialize()
+                res = await sess.call_tool(name, arguments)
+                out = []
+                for c in res.content:
+                    out.append(getattr(c, "text", json.dumps(c.model_dump())))
+                return "\n".join(out) if out else json.dumps(res.model_dump())
+    return asyncio.run(_call())
+
+
 def make_server():
     from mcp.server.fastmcp import FastMCP
     mcp = FastMCP("widespread", instructions=(
@@ -43,6 +79,24 @@ def make_server():
                 return fn(args if isinstance(args, dict) else {})
             return call
         mcp.tool(name=name, description=desc)(_mk())
+
+    # Passthrough: register every remote tool we don't implement locally.
+    # The local 16 are bespoke (client-held keys, ledger side-effects);
+    # everything else — identity, oracle, requests, sightings — proxies the
+    # live catalog so this package never drifts behind the bridge.
+    local = set(_tools())
+    for t in _remote_tools():
+        if t.name in local:
+            continue
+        def _mkp(tool_name=t.name):
+            def call(arguments: str = "{}") -> str:
+                try:
+                    args = json.loads(arguments) if isinstance(arguments, str) else arguments
+                except json.JSONDecodeError:
+                    return json.dumps({"error": "arguments must be a JSON object string"})
+                return _remote_call(tool_name, args if isinstance(args, dict) else {})
+            return call
+        mcp.tool(name=t.name, description=t.description or t.name)(_mkp())
     return mcp
 
 

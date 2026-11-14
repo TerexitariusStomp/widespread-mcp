@@ -1,3 +1,6 @@
+> Canonical home: this package lives in the widespread-bridge monorepo at
+> `widespread-mcp/`. The GitHub repo is a mirror; SKILL.md here is generated.
+
 # widespread-mcp
 
 <!-- mcp-name: io.github.TerexitariusStomp/widespread -->
